@@ -20,6 +20,8 @@ class VideoOverlayView : UIView {
     var shouldShowTimeline : Bool = false;
     var dragging = false;
 
+    
+    var velocityEstimator : VelocityEstimator? = nil;
     var startPosition : CGPoint = CGPointMake(0.0, 0.0);
     var endPosition : CGPoint = CGPointMake(0.0, 0.0);
     var position : Double = 0.0;
@@ -38,12 +40,13 @@ class VideoOverlayView : UIView {
     override init(frame : CGRect) {
         super.init(frame : frame);
         self.setupDrawingParameters();
+        velocityEstimator = VelocityEstimator(size:20,touchView:self);
     }
     
     required init?(coder aDecoder: NSCoder){
         super.init(coder : aDecoder);
         self.setupDrawingParameters();
-        
+        velocityEstimator = VelocityEstimator(size:20,touchView:self);
     }
 
     func setupDrawingParameters() -> () {
@@ -68,9 +71,6 @@ class VideoOverlayView : UIView {
     }
     
     override func drawRect(rect: CGRect) {
-        
-       
-        
         //Create the path
         let path = CGPathCreateMutable();
         CGPathMoveToPoint(path, nil, startPosition.x, startPosition.y);
@@ -84,14 +84,11 @@ class VideoOverlayView : UIView {
     }
     
     
-    //keep a number of touches and use it to compute velocity
-    var touchFIFO : NSMutableArray = NSMutableArray();
-    let kFifoLength  = 20;
     
     override func touchesBegan(touches: Set<UITouch>, withEvent event: UIEvent?) {
         //check if close enough to timeline to drag
         if(CGRectContainsPoint(touchRect,touches.first!.locationInView(self))){
-            touchFIFO.addObject(touches.first!);
+            velocityEstimator?.pushTouch(touches.first!);
             dragging = true;
         }
     }
@@ -101,28 +98,13 @@ class VideoOverlayView : UIView {
         //if we're scrubbing, move line
         if(dragging){
             //constrain to FIFO behaviour
-            touchFIFO.addObject(touches.first!);
-            if(touchFIFO.count > kFifoLength){
-                touchFIFO.removeObjectAtIndex(0);
-            }
-            
-            //compute average velocity
-            var velocity : Double = 0.0;
-            for(var touchIdx=1;touchIdx<touchFIFO.count;++touchIdx){
-                velocity += Double(touchFIFO.objectAtIndex(touchIdx).locationInView(self).x - touchFIFO.objectAtIndex(touchIdx).locationInView(self).x) / (touchFIFO[touchIdx].timestamp - touchFIFO[touchIdx].timestamp);
-            }
-            velocity /= Double(touchFIFO.count);
-            self.velocityLabel?.text = String(velocity);
-            NSLog("Velocity: %f", velocity);
-            
-            
-            
-            
+            velocityEstimator?.pushTouch(touches.first!);
+            NSLog("velocity: %f",velocityEstimator!.velocity);
         }
     }
     
     override func touchesEnded(touches: Set<UITouch>, withEvent event: UIEvent?) {
-        touchFIFO.removeAllObjects();
+        
         dragging = false;
     }
     
@@ -131,5 +113,50 @@ class VideoOverlayView : UIView {
     
 };
 
-
+//Esimates the x-velocity of touches
+class VelocityEstimator {
+    //mutated state
+    var touchLocations : Array<CGPoint>? = nil;
+    var timestamps     : Array<NSTimeInterval>? = nil;
+    var velocity = 0.0;
+    
+    //fixed on init
+    var view : UIView? = nil;
+    var size = 0;
+    
+    init(size : Int, touchView view : UIView){
+        assert(size > 1);
+        self.view = view;
+        self.size = size;
         
+        touchLocations = Array();
+        timestamps = Array();
+    }
+    
+    //Behaves like a FIFO on each array
+    func pushTouch(touch : UITouch){
+        //add objects to the end
+        touchLocations?.append(touch.locationInView(view));
+        timestamps?.append(touch.timestamp);
+        
+        //remove first objects
+        if(touchLocations?.count > size){
+            touchLocations?.removeFirst();
+            timestamps?.removeFirst();
+        }
+        computeVelocity();
+    }
+    
+    func computeVelocity(){
+        guard touchLocations?.count == size else {
+            return;
+        }
+        
+        velocity = 0.0;
+        for(var idx=1;idx<touchLocations!.count;++idx){
+            let distance  = Double(touchLocations![idx-1].x - touchLocations![idx].x);
+            velocity += distance / (timestamps![idx-1] - timestamps![idx]);
+        }
+    }
+    
+};
