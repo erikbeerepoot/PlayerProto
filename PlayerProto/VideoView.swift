@@ -19,12 +19,7 @@ class VideoOverlayView : UIView {
     //state
     var shouldShowTimeline : Bool = false;
     var dragging = false;
-
-    
     var velocityEstimator : VelocityEstimator? = nil;
-    var startPosition : CGPoint = CGPointMake(0.0, 0.0);
-    var endPosition : CGPoint = CGPointMake(0.0, 0.0);
-    var position : Double = 0.0;
     
     //Visual properties
     var timelineColour : UIColor = UIColor.redColor();
@@ -52,17 +47,17 @@ class VideoOverlayView : UIView {
     func setupDrawingParameters() -> () {
         lineWidth = numberOfSwipesForTimeline*Double(self.frame.size.width);
         
-        startPosition = CGPointMake(self.frame.size.width/2, self.frame.size.height/2);
-        endPosition = startPosition;
-        
-        //Compute the point where the line ends
-        endPosition.x = startPosition.x + CGFloat(lineWidth);
-        
-        //Initialize touch parameters
-        touchRect.origin.x = startPosition.x;
-        touchRect.size.width = (endPosition.x - startPosition.x);
-        touchRect.origin.y = startPosition.y - CGFloat(kTouchRectBoundary);
-        touchRect.size.height = 2 * CGFloat(kTouchRectBoundary);
+//        startPosition = CGPointMake(self.frame.size.width/2, self.frame.size.height/2);
+//        endPosition = startPosition;
+//        
+//        //Compute the point where the line ends
+//        endPosition.x = startPosition.x + CGFloat(lineWidth);
+//        
+//        //Initialize touch parameters
+//        touchRect.origin.x = startPosition.x;
+//        touchRect.size.width = (endPosition.x - startPosition.x);
+//        touchRect.origin.y = startPosition.y - CGFloat(kTouchRectBoundary);
+//        touchRect.size.height = 2 * CGFloat(kTouchRectBoundary);
     }
     
     
@@ -71,16 +66,16 @@ class VideoOverlayView : UIView {
     }
     
     override func drawRect(rect: CGRect) {
-        //Create the path
-        let path = CGPathCreateMutable();
-        CGPathMoveToPoint(path, nil, startPosition.x, startPosition.y);
-        CGPathAddLineToPoint(path, nil, endPosition.x, endPosition.y);
-        
-        //Draw the path
-        let context = UIGraphicsGetCurrentContext();
-        CGContextSetStrokeColor(context, CGColorGetComponents(self.timelineColour.CGColor));
-        CGContextAddPath(context, path);
-        CGContextStrokePath(context);
+//        //Create the path
+//        let path = CGPathCreateMutable();
+//        CGPathMoveToPoint(path, nil, startPosition.x, startPosition.y);
+//        CGPathAddLineToPoint(path, nil, endPosition.x, endPosition.y);
+//        
+//        //Draw the path
+//        let context = UIGraphicsGetCurrentContext();
+//        CGContextSetStrokeColor(context, CGColorGetComponents(self.timelineColour.CGColor));
+//        CGContextAddPath(context, path);
+//        CGContextStrokePath(context);
     }
     
     
@@ -104,14 +99,50 @@ class VideoOverlayView : UIView {
     }
     
     override func touchesEnded(touches: Set<UITouch>, withEvent event: UIEvent?) {
-        
         dragging = false;
     }
     
-    
-    
-    
 };
+
+struct Velocity {
+    var x,y : Float;
+}
+
+class BouncyLine {
+    //state tracking
+    let mass, friction : Float;
+    var position : CGPoint;
+    var velocity : Velocity;
+    
+    //parameters for tuning the system
+    let updateFrequency : Float = (1/20);
+    let c : Float = 2;
+    
+    init(startPosition : CGPoint, initialVelocity : Velocity, mass : Float, friction : Float){
+        self.velocity = initialVelocity;
+        self.position = startPosition;
+        self.friction = friction;
+        self.mass = mass;
+    }
+    
+    func update(){
+        //1. Compute the change in position
+        let delta_x : Float = velocity.x * updateFrequency;
+        let delta_y : Float = velocity.y * updateFrequency;
+        
+        //2. Update the position
+        position.x += CGFloat(delta_x);
+        position.y += CGFloat(delta_y);
+        
+        //2. Compute the current velocity using conservation of energy
+        velocity.x = sqrt(delta_x * (friction*c));
+        velocity.y = sqrt(delta_y * (friction*c));
+    }
+    
+    func getPosition() -> CGPoint{
+        return position;
+    }
+}
 
 //Esimates the x-velocity of touches
 class VelocityEstimator {
